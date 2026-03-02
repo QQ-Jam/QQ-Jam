@@ -195,6 +195,81 @@ def scan_and_process(model):
             # 生成输出文件路径
             base_name = os.path.splitext(filename)[0]
             output_path = os
+            # 生成输出文件路径
+            base_name = os.path.splitext(filename)[0]
+            output_path = os.path.join(live_date_path, f"{base_name}.txt")
+            
+            # 获取视频时长
+            duration = get_video_duration_minutes(video_path)
+            print(f"   📹 处理视频: {filename} (时长约 {duration} 分钟)")
+            
+            try:
+                # 执行转录
+                transcribe_video(model, video_path, output_path)
+                
+                # 保存记录到数据库
+                save_record(host, host_name, live_date, filename, duration)
+                print(f"   💾 已保存到数据库")
+                
+                processed_count += 1
+                
+            except Exception as e:
+                print(f"   ❌ 处理失败: {filename}")
+                print(f"      错误信息: {e}")
+    
+    # 扫描完成统计
+    print(f"\n{'='*50}")
+    print(f"📊 本次扫描完成")
+    print(f"   ✅ 新处理: {processed_count} 个视频")
+    print(f"   ⏭️ 跳过: {skipped_count} 个视频")
+    print(f"{'='*50}")
+
+
+def main():
+    """主函数"""
+    print("🚀 转录服务启动")
+    print(f"⚙️ 配置信息:")
+    print(f"   - 路径: {HOST_PATH}")
+    print(f"   - 扫描间隔: {SCAN_INTERVAL_MINUTES} 分钟")
+    print(f"   - 文件夹时效: {FOLDER_AGE_HOURS} 小时内")
+    print(f"   - 模型: {WHISPER_MODEL}")
+    print(f"   - 语言: {LANGUAGE}")
+    
+    # 初始化数据库
+    init_database()
+    
+    # 加载模型（只加载一次）
+    print(f"\n📦 正在加载 Whisper 模型: {WHISPER_MODEL}")
+    print("   首次运行需要下载模型，请耐心等待...")
+    model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
+    print("✅ 模型加载完成\n")
+    
+    # 无限循环
+    while True:
+        try:
+            # 执行扫描和处理
+            scan_and_process(model)
+            
+            # 计算下次扫描时间
+            next_scan = datetime.now() + timedelta(minutes=SCAN_INTERVAL_MINUTES)
+            print(f"\n⏰ 等待 {SCAN_INTERVAL_MINUTES} 分钟后再次扫描...")
+            print(f"   下次扫描时间: {next_scan.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"   按 Ctrl+C 可停止服务\n")
+            
+            time.sleep(SCAN_INTERVAL_MINUTES * 60)
+            
+        except KeyboardInterrupt:
+            print("\n\n👋 服务已手动停止")
+            print("   感谢使用，再见！")
+            break
+        except Exception as e:
+            print(f"\n❌ 发生错误: {e}")
+            print("⏰ 30秒后重试...")
+            time.sleep(30)
+
+
+if __name__ == "__main__":
+    main()
 
 
 
