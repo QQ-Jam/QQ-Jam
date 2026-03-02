@@ -88,14 +88,11 @@ def get_video_duration_minutes(file_path):
 def is_folder_recent(folder_path, hours):
     """检查文件夹创建时间是否在指定小时内"""
     try:
-        # macOS 上获取创建时间
         stat = os.stat(folder_path)
-        # st_birthtime 是创建时间（macOS 支持）
         create_time = datetime.fromtimestamp(stat.st_birthtime)
         cutoff_time = datetime.now() - timedelta(hours=hours)
         return create_time > cutoff_time
     except AttributeError:
-        # 如果系统不支持 st_birthtime，用修改时间
         mtime = datetime.fromtimestamp(os.path.getmtime(folder_path))
         cutoff_time = datetime.now() - timedelta(hours=hours)
         return mtime > cutoff_time
@@ -135,27 +132,29 @@ def save_record(host, host_name, live_date, filename, duration):
 def transcribe_video(model, video_path, output_path):
     """转录视频并保存文字"""
     print(f"🎬 开始转录: {os.path.basename(video_path)}")
+    start_time = time.time()
     
     segments, info = model.transcribe(video_path, language=LANGUAGE)
     
     with open(output_path, 'w', encoding='utf-8') as f:
         for segment in segments:
-            # 格式化时间戳
             start_min = int(segment.start // 60)
             start_sec = int(segment.start % 60)
             timestamp = f"[{start_min:02d}:{start_sec:02d}]"
-            
             f.write(f"{timestamp} {segment.text}\n")
     
-    print(f"✅ 转录完成: {output_path}")
+    elapsed = round((time.time() - start_time) / 60, 1)
+    print(f"✅ 转录完成: {os.path.basename(output_path)} (耗时 {elapsed} 分钟)")
 
 
 def scan_and_process(model):
     """扫描并处理新视频"""
     host, host_name = parse_host_folder(HOST_PATH)
+    
     print(f"\n{'='*50}")
     print(f"🔍 扫描中... Host: {host}, HostName: {host_name}")
     print(f"📁 路径: {HOST_PATH}")
+    print(f"⏰ 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*50}")
     
     if not os.path.exists(HOST_PATH):
@@ -172,11 +171,50 @@ def scan_and_process(model):
         # 跳过非文件夹
         if not os.path.isdir(live_date_path):
             continue
+        
+        # 检查文件夹是否在指定时间内创建
+        if not is_folder_recent(live_date_path, FOLDER_AGE_HOURS):
+            continue
+        
+        print(f"\n📂 发现新文件夹: {live_date}")
+        
+        # 遍历视频文件
+        for filename in os.listdir(live_date_path):
+            # 只处理 mp4 和 ts 文件
+            if not filename.lower().endswith(('.mp4', '.ts')):
+                continue
+            
+            video_path = os.path.join(live_date_path, filename)
+            
+            # 检查是否已处理过
+            if is_already_processed(host, live_date, filename):
+                print(f"   ⏭️ 已处理过，跳过: {filename}")
+                skipped_count += 1
+                continue
+            
+            # 生成输出文件路径
+            base_name = os.path.splitext(filename)[0]
+            output_path = os
 
 
 
 
+pip install faster-whisper moviepy
 
+# 启动服务
+python transcriber.py
+
+# 停止服务
+按 Ctrl + C
+
+# 后台运行，日志保存到 log.txt
+nohup python transcriber.py > log.txt 2>&1 &
+
+# 查看日志
+tail -f log.txt
+
+# 停止
+pkill -f transcriber.py
 
 首先我们有一个sqlite的DB叫Transcription.db
 table name:Transcription_Record
